@@ -1,0 +1,2011 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Block Care | Unités de Soin Modulaires Humanitaires</title>
+    <!-- Chargement de Leaflet pour la vraie carte interactive -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        /* --- VARIABLES & DESIGN TOKENS --- */
+        :root {
+            --primary: #006cce; /* Bleu cohérent avec le logo */
+            --primary-dark: #004b8f;
+            --text: #1A202C;
+            --text-light: #4A5568;
+            --bg-light: #F0F4F8;
+            --white: #FFFFFF;
+            --border: rgba(255, 255, 255, 0.3);
+            
+            /* Couleurs des solutions */
+            --urgency: #E53E3E;   
+            --diagnostic: #ECC94B; 
+            --suivi: #3182CE;     
+            --prevention: #38A169; 
+            --custom: #718096; /* Gris bleuté pour le sur-mesure */
+            
+            --max-width: 1200px; 
+            --radius: 16px;
+            --shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
+            --glass-bg: rgba(255, 255, 255, 0.45);
+            --glass-blur: blur(12px);
+        }
+
+        /* --- RESET & BASE --- */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            text-decoration: none !important; 
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: var(--text);
+            line-height: 1.6;
+            background: linear-gradient(135deg, #FFFFFF 0%, #f0f7ff 50%, #e6effd 100%);
+            background-attachment: fixed;
+            overflow-x: hidden;
+        }
+
+        /* --- NAVIGATION --- */
+        header {
+            height: 100px;
+            display: flex;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border-bottom: 1px solid var(--border);
+            z-index: 1000;
+            transition: all 0.4s ease;
+        }
+
+        header.scrolled {
+            height: 80px;
+            background: rgba(255, 255, 255, 0.9);
+        }
+
+        .nav-inner {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            padding: 0 6rem; 
+        }
+
+        .logo-box {
+            display: flex;
+            align-items: center;
+            background: transparent;
+            padding: 5px 0;
+            transition: all 0.4s ease;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .logo-box img {
+            height: 75px;
+            width: auto;
+            display: block;
+            transition: all 0.4s ease;
+        }
+
+        header.scrolled .logo-box img {
+            height: 55px;
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        /* --- SEARCH BOX STYLES --- */
+        .search-wrapper {
+            display: flex;
+            align-items: center;
+            position: relative;
+        }
+
+        .search-input {
+            width: 0;
+            opacity: 0;
+            padding: 0.6rem 0;
+            border-radius: 50px;
+            border: 1px solid var(--border);
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            font-size: 0.85rem;
+            outline: none;
+            pointer-events: none;
+            color: var(--text);
+        }
+
+        .search-input.active {
+            width: 200px;
+            opacity: 1;
+            padding: 0.6rem 1rem;
+            margin-right: 0.5rem;
+            pointer-events: auto;
+            border-color: var(--primary);
+        }
+
+        .search-trigger {
+            cursor: pointer;
+            color: var(--text-light);
+            transition: color 0.3s;
+            display: flex;
+            align-items: center;
+        }
+
+        .search-trigger:hover {
+            color: var(--primary);
+        }
+
+        .nav-links {
+            display: flex; gap: 1.2rem;
+        }
+
+        .nav-links a {
+            color: var(--text-light);
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: color 0.3s;
+            cursor: pointer;
+        }
+
+        .nav-links a:hover, .nav-links a.active {
+            color: var(--primary);
+        }
+
+        /* --- MULTIPAGE LOGIC --- */
+        .page {
+            display: none;
+            animation: fadeIn 0.5s ease;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* --- HERO SECTION --- */
+        .hero {
+            padding: 120px 0 60px; 
+            text-align: center;
+        }
+
+        .hero h1 {
+            font-size: 4rem;
+            font-weight: 900;
+            margin-bottom: 1.5rem;
+            max-width: 850px;
+            margin-left: auto;
+            margin-right: auto;
+            background: linear-gradient(135deg, var(--text) 0%, var(--primary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero p {
+            font-size: 1.35rem;
+            color: var(--text-light);
+            max-width: 700px;
+            margin: 0 auto 3rem;
+        }
+
+        .cta-group {
+            display: flex;
+            gap: 1.5rem;
+            justify-content: center;
+        }
+
+        /* --- BOUTONS --- */
+        .btn {
+            padding: 1rem 2rem;
+            border-radius: 50px;
+            font-weight: 700;
+            font-size: 0.95rem;
+            display: inline-block;
+            cursor: pointer;
+            border: none;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            text-align: center;
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+            color: var(--white);
+            box-shadow: 0 10px 20px rgba(0, 108, 206, 0.2);
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-dark);
+            transform: translateY(-3px) scale(1.05);
+        }
+
+        .btn-secondary {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            color: var(--primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-ai {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 0.6rem 1.2rem;
+            font-size: 0.85rem;
+            border-radius: 50px;
+            border: none;
+            cursor: pointer;
+            font-weight: 700;
+            box-shadow: 0 4px 15px rgba(118, 75, 162, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .btn-ai:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(118, 75, 162, 0.4);
+        }
+
+        .btn-donate-nav {
+            padding: 0.6rem 1.2rem;
+            background: transparent;
+            border: 2px solid var(--primary);
+            color: var(--primary);
+            font-size: 0.85rem;
+        }
+
+        .btn-donate-nav:hover {
+            background: var(--primary);
+            color: var(--white);
+        }
+
+        /* --- SECTIONS --- */
+        .section {
+            padding: 80px 0 100px; 
+        }
+
+        .container {
+            max-width: var(--max-width);
+            margin: 0 auto;
+            padding: 0 5rem; 
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .card-glass {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            transition: all 0.3s ease;
+        }
+
+        /* --- SOLUTIONS GRID --- */
+        .solutions-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr); 
+            gap: 1.2rem;
+            justify-content: center;
+        }
+
+        .solution-card {
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            height: 100%; 
+            text-align: center;
+            cursor: pointer;
+            overflow: hidden;
+        }
+
+        .card-image-thumb {
+            width: 100%;
+            height: 120px;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 1rem;
+            background: #eee;
+        }
+
+        .card-image-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .solution-card:hover {
+            transform: translateY(-12px) scale(1.03); 
+            background: rgba(255, 255, 255, 0.7);
+            box-shadow: 0 15px 45px rgba(0, 0, 0, 0.1);
+        }
+
+        .model-badge {
+            display: inline-block;
+            padding: 0.4rem 0.8rem;
+            border-radius: 50px;
+            font-size: 0.65rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            margin-bottom: 0.8rem;
+            width: fit-content;
+            align-self: center;
+        }
+
+        .card-urgency { border-top: 6px solid var(--urgency); }
+        .badge-urgency { background: rgba(229, 62, 62, 0.15); color: var(--urgency); }
+        .card-diagnostic { border-top: 6px solid var(--diagnostic); }
+        .badge-diagnostic { background: rgba(236, 201, 75, 0.15); color: #975A16; }
+        .card-suivi { border-top: 6px solid var(--suivi); }
+        .badge-suivi { background: rgba(49, 130, 206, 0.15); color: var(--suivi); }
+        .card-prevention { border-top: 6px solid var(--prevention); }
+        .badge-prevention { background: rgba(56, 161, 105, 0.15); color: var(--prevention); }
+        .card-custom { border-top: 6px solid var(--custom); }
+        .badge-custom { background: rgba(113, 128, 150, 0.15); color: var(--custom); }
+
+        .solution-card h3 { margin-bottom: 0.5rem; font-size: 1.1rem; font-weight: 800; }
+        .solution-card .usage { font-weight: 700; font-size: 0.75rem; margin-bottom: 1rem; color: var(--text-light); min-height: 2rem; display: flex; align-items: center; justify-content: center; }
+        
+        .module-list {
+            margin-top: auto; 
+            padding-top: 1rem;
+            border-top: 1px solid rgba(0, 0, 0, 0.05);
+            list-style: none;
+        }
+
+        .module-list li {
+            font-size: 0.75rem;
+            margin-bottom: 0.3rem;
+            text-align: center; 
+            font-weight: 600;
+            color: var(--text-light);
+        }
+
+        /* --- TARGET AUDIENCE --- */
+        .target {
+            background-color: #1a202c; 
+            color: var(--white);
+            text-align: center;
+            padding: 100px 0;
+            width: 100%;
+        }
+
+        .target h2 { color: var(--white); margin-bottom: 3.5rem; font-size: 2.5rem; }
+
+        .target-grid {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 3rem;
+        }
+
+        .target-item {
+            flex: 1;
+            min-width: 250px;
+            max-width: 300px;
+            padding: 2.5rem 2rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: var(--radius);
+        }
+
+        .target-item h4 { font-size: 1.3rem; margin-bottom: 1rem; color: #63B3ED; }
+        .target-item p { font-size: 1rem; opacity: 0.85; }
+
+        /* --- STATS SECTION --- */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 2rem;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .stat-card {
+            padding: 3rem 2rem;
+            text-align: center;
+            border-radius: 30px;
+            position: relative;
+            overflow: hidden;
+            background: rgba(255, 255, 255, 0.5);
+            border: 1px solid var(--border);
+            transition: all 0.4s ease;
+        }
+
+        .stat-card:hover {
+            background: var(--white);
+            transform: translateY(-10px);
+            box-shadow: 0 20px 40px rgba(0, 108, 206, 0.08);
+        }
+
+        .stat-card.clickable {
+            cursor: pointer;
+        }
+
+        .stat-card h3 {
+            font-size: 3.5rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+            line-height: 1;
+        }
+
+        .stat-card p {
+            font-size: 0.85rem;
+            font-weight: 800;
+            color: var(--text-light);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        /* --- TESTIMONIALS SECTION --- */
+        .testimonials-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-bottom: 4rem;
+        }
+
+        .testimonial-card {
+            padding: 3rem 2.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .testimonial-text {
+            font-style: italic;
+            font-size: 1.15rem;
+            color: var(--text);
+            line-height: 1.6;
+            position: relative;
+        }
+
+        .testimonial-author {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-top: auto;
+        }
+
+        .author-info h5 {
+            font-size: 1rem;
+            font-weight: 800;
+            color: var(--primary);
+        }
+
+        .author-info p {
+            font-size: 0.85rem;
+            color: var(--text-light);
+            font-weight: 600;
+        }
+
+        /* --- HISTOIRE (Storytelling) --- */
+        .story-container {
+            max-width: 900px;
+            margin: 2rem auto;
+            padding: 4rem;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            border-radius: 40px;
+        }
+
+        .story-section-new {
+            margin-bottom: 3.5rem;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid rgba(0, 108, 206, 0.08);
+        }
+
+        .story-section-new h3 {
+            font-size: 1.6rem;
+            font-weight: 800;
+            color: var(--primary);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .story-section-new p {
+            font-size: 1.1rem;
+            color: var(--text-light);
+            line-height: 1.7;
+        }
+
+        .highlight-blue {
+            color: var(--primary);
+            font-weight: 700;
+        }
+
+        .story-tag {
+            display: inline-block;
+            background: rgba(0, 108, 206, 0.1);
+            color: var(--primary);
+            padding: 0.3rem 0.8rem;
+            border-radius: 50px;
+            font-size: 0.75rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            margin-bottom: 0.8rem;
+        }
+
+        /* --- CARROUSELS --- */
+        .carousel-container {
+            position: relative;
+            width: 100%;
+            border-radius: 30px;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+        }
+        .carousel-slides {
+            display: flex;
+            transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .carousel-slide {
+            min-width: 100%;
+        }
+        .carousel-slide img {
+            width: 100%;
+            display: block;
+            height: 400px;
+            object-fit: cover;
+        }
+        .carousel-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255, 255, 255, 0.4);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+            color: var(--primary);
+            width: 45px;
+            height: 45px;
+            cursor: pointer;
+            border-radius: 50%;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            transition: all 0.3s ease;
+        }
+        .carousel-btn:hover {
+            background: var(--white);
+            transform: translateY(-50%) scale(1.1);
+        }
+        .carousel-prev { left: 15px; }
+        .carousel-next { right: 15px; }
+
+        /* --- DASHBOARD SOLUTIONS --- */
+        .solution-detail-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 3rem;
+        }
+
+        .solution-hero-split {
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: 4rem;
+            align-items: center;
+        }
+
+        .solution-visual-box {
+            position: relative;
+            border-radius: 30px;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+        }
+
+        .solution-visual-box img {
+            width: 100%;
+            display: block;
+            transition: transform 0.5s ease;
+        }
+
+        .solution-main-info {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            align-items: flex-start;
+        }
+
+        .intro-text-bold {
+            font-size: 1.4rem;
+            font-weight: 800;
+            line-height: 1.4;
+            color: var(--text);
+        }
+
+        .specs-dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1.5rem;
+            width: 100%;
+        }
+
+        .spec-item-card {
+            background: rgba(255, 255, 255, 0.6);
+            padding: 1.5rem;
+            border-radius: 20px;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            transition: all 0.3s ease;
+        }
+
+        .spec-item-card:hover {
+            background: var(--white);
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+        }
+
+        .spec-label {
+            font-size: 0.75rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-light);
+            margin-bottom: 0.5rem;
+            display: block;
+        }
+
+        .spec-value {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        /* --- AI HELPERS --- */
+        .ai-result-box {
+            margin-top: 1.5rem;
+            padding: 1.5rem;
+            border-radius: 15px;
+            background: rgba(118, 75, 162, 0.05);
+            border: 1px dashed #764ba2;
+            display: none;
+            animation: fadeIn 0.4s ease;
+        }
+
+        .loader-dots {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            margin: 10px 0;
+        }
+
+        .loader-dots div {
+            width: 8px;
+            height: 8px;
+            background: var(--primary);
+            border-radius: 50%;
+            animation: bounce 0.5s infinite alternate;
+        }
+
+        .loader-dots div:nth-child(2) { animation-delay: 0.1s; }
+        .loader-dots div:nth-child(3) { animation-delay: 0.2s; }
+
+        @keyframes bounce { to { transform: translateY(-5px); opacity: 0.5; } }
+
+        /* --- FAQ SECTION --- */
+        .faq-wrapper {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .faq-category {
+            margin-bottom: 3.5rem;
+        }
+
+        .faq-category h3 {
+            color: var(--primary);
+            font-size: 1.4rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid rgba(0, 108, 206, 0.1);
+        }
+
+        .faq-item {
+            margin-bottom: 1.8rem;
+            padding: 1.5rem;
+            background: rgba(255, 255, 255, 0.4);
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            transition: all 0.3s ease;
+        }
+
+        .faq-item:hover {
+            background: rgba(255, 255, 255, 0.7);
+            transform: translateX(5px);
+        }
+
+        .faq-question {
+            font-weight: 800;
+            font-size: 1.05rem;
+            color: var(--text);
+            margin-bottom: 0.8rem;
+            display: block;
+        }
+
+        .faq-answer {
+            font-size: 0.95rem;
+            color: var(--text-light);
+            line-height: 1.6;
+        }
+
+        /* --- SUGGESTIONS --- */
+        .solution-footer-nav {
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 1px solid rgba(0, 0, 0, 0.08);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .suggestions-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        .btn-suggestion {
+            padding: 0.6rem 1.2rem;
+            border-radius: 50px;
+            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.4);
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: var(--text-light);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .btn-suggestion.sugg-urg:hover { background: var(--urgency); border-color: var(--urgency); color: white; }
+        .btn-suggestion.sugg-diag:hover { background: var(--diagnostic); border-color: var(--diagnostic); color: #975A16; }
+        .btn-suggestion.sugg-sui:hover { background: var(--suivi); border-color: var(--suivi); color: white; }
+        .btn-suggestion.sugg-prev:hover { background: var(--prevention); border-color: var(--prevention); color: white; }
+        .btn-suggestion.sugg-cust:hover { background: var(--custom); border-color: var(--custom); color: white; }
+
+        /* --- BOUTON RETOUR --- */
+        .btn-back {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.6rem;
+            font-weight: 700;
+            color: var(--text-light);
+            cursor: pointer;
+            margin-bottom: 2rem;
+            padding: 0.7rem 1.4rem;
+            background: rgba(255, 255, 255, 0.5);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid var(--border);
+            border-radius: 50px;
+            font-size: 0.85rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+        }
+
+        .btn-back:hover {
+            color: var(--primary);
+            background: var(--white);
+            transform: translateX(-5px);
+        }
+
+        /* --- FORM ELEMENTS --- */
+        .form-group input, .form-group select, .form-group textarea { 
+            width: 100%; 
+            padding: 1.1rem; 
+            border-radius: 14px; 
+            border: 1px solid var(--border); 
+            background: var(--glass-bg); 
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            color: var(--text);
+            font-size: 1rem; 
+            outline: none; 
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+        }
+
+        /* --- FICHE CONTACT --- */
+        .contact-content {
+            max-width: 1200px; 
+            margin: 4rem auto;
+            background: var(--white); 
+            padding: 6rem 4rem;
+            border-radius: 40px;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.06); 
+            text-align: center;
+        }
+
+        .contact-content h2 { font-size: 3rem; margin-bottom: 2rem; color: var(--text); font-weight: 800; }
+        .contact-content p { font-size: 1.35rem; margin-bottom: 4rem; color: var(--text-light); max-width: none; margin-left: auto; margin-right: auto; }
+
+        /* --- FICHE DON --- */
+        .donate-container {
+            max-width: 1000px;
+            margin: 3rem auto;
+            background: var(--white);
+            border-radius: 30px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            display: grid;
+            grid-template-columns: 1fr 1.2fr;
+        }
+
+        .donate-info {
+            background: var(--primary);
+            color: var(--white);
+            padding: 4.5rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .donate-info h3 { font-size: 2.5rem; margin-bottom: 2rem; font-weight: 800; }
+        .donate-info p { margin-bottom: 2.5rem; font-size: 1.2rem; opacity: 0.9; line-height: 1.5; }
+
+        .impact-item { display: flex; align-items: flex-start; gap: 1.5rem; margin-bottom: 2rem; font-size: 1.05rem; }
+        .impact-icon { background: rgba(255, 255, 255, 0.2); padding: 8px 15px; border-radius: 12px; font-weight: 800; min-width: 60px; text-align: center; }
+
+        .donate-form { padding: 4.5rem; background: var(--white); }
+        .donate-tabs { display: flex; gap: 1rem; margin-bottom: 2.5rem; }
+        .tab-btn { flex: 1; padding: 1rem; border-radius: 15px; border: 1px solid var(--border); background: var(--bg-light); cursor: pointer; font-weight: 700; color: var(--text-light); transition: all 0.3s; }
+        .tab-btn.active { background: var(--primary); color: var(--white); border-color: var(--primary); }
+
+        .amount-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; margin-bottom: 2.5rem; }
+        .amount-btn { padding: 1.2rem; border-radius: 15px; border: 2px solid var(--bg-light); background: transparent; font-weight: 800; color: var(--text); cursor: pointer; transition: all 0.2s; font-size: 1.1rem; }
+        .amount-btn:hover, .amount-btn.active { border-color: var(--primary); color: var(--primary); background: rgba(0, 108, 206, 0.05); }
+
+        .custom-amount { position: relative; margin-bottom: 2.5rem; }
+        .custom-amount input { width: 100%; padding: 1.2rem; padding-right: 3.5rem; border-radius: 15px; border: 2px solid var(--bg-light); font-size: 1.1rem; outline: none; transition: border-color 0.3s; }
+        .custom-amount input:focus { border-color: var(--primary); }
+        .custom-amount span { position: absolute; right: 1.5rem; top: 50%; transform: translateY(-50%); font-weight: 800; color: var(--text-light); font-size: 1.2rem; }
+
+        /* --- MAP PAGE --- */
+        #map-element {
+            width: 100%;
+            height: 600px;
+            background: #eee;
+            border-radius: 30px;
+            z-index: 1;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+        }
+
+        /* --- MENTIONS LÉGALES --- */
+        .legal {
+            background: rgba(248, 250, 252, 0.5);
+            padding: 80px 0 60px;
+            border-top: 1px solid rgba(0, 0, 0, 0.03);
+        }
+
+        .legal-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 4rem;
+        }
+
+        .legal-item {
+            display: flex;
+            flex-direction: column;
+            gap: 1.2rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .legal-item:hover {
+            transform: translateY(-5px);
+        }
+
+        .legal-item svg {
+            color: var(--primary);
+            opacity: 0.8;
+        }
+
+        footer {
+            padding: 40px 0;
+            text-align: center;
+            color: var(--text-light);
+            font-size: 0.85rem;
+            font-weight: 600;
+            background: rgba(248, 250, 252, 0.5);
+            letter-spacing: 0.5px;
+            opacity: 0.7;
+        }
+
+        /* --- RESPONSIVE --- */
+        @media (max-width: 1024px) {
+            .solution-hero-split { grid-template-columns: 1fr; }
+            .solutions-grid { grid-template-columns: repeat(3, 1fr); }
+            .donate-container { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 768px) {
+            .nav-inner { padding: 0 2rem; }
+            .solutions-grid { grid-template-columns: repeat(2, 1fr); }
+            .hero h1 { font-size: 3rem; }
+            .contact-content, .donate-form, .story-container { padding: 2.5rem; }
+            .legal-grid { gap: 2.5rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <header id="main-header">
+        <div class="container nav-inner">
+            <div class="logo-box" onclick="showPage('home')">
+                <img src="Capture d’écran 2026-01-11 à 21.35.15.png" alt="Block Care Logo" class="logo-default">
+            </div>
+            <div class="nav-right">
+                <!-- NOUVEL ICONE RECHERCHE -->
+                <div class="search-wrapper">
+                    <input type="text" id="site-search" placeholder="Rechercher..." class="search-input">
+                    <div class="search-trigger" onclick="toggleSearchBar()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    </div>
+                </div>
+                <nav class="nav-links">
+                    <a onclick="showPage('home')" id="nav-home">Accueil</a>
+                    <a onclick="showPage('solutions')" id="nav-solutions">Solutions</a>
+                    <a onclick="showPage('history')" id="nav-history">Histoire</a>
+                    <a onclick="showPage('faq')" id="nav-faq">FAQ</a>
+                    <a onclick="showPage('contact')" id="nav-contact">Contact</a>
+                </nav>
+                <a onclick="showPage('donate')" class="btn btn-donate-nav" id="nav-donate">Faire un don</a>
+            </div>
+        </div>
+    </header>
+
+    <main id="page-container">
+        
+        <!-- PAGE ACCUEIL -->
+        <div id="page-home" class="page active">
+            <section class="hero">
+                <div class="container">
+                    <h1>Des soins qui bougent</h1>
+                    <p>Block Care déploie des unités de soin intelligentes et modulaires pour les environnements médicaux les plus contraints.</p>
+                    <div class="cta-group">
+                        <button onclick="showPage('solutions')" class="btn btn-primary">Découvrir nos solutions</button>
+                        <button onclick="showPage('contact')" class="btn btn-secondary">Nous contacter</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION CONCEPT -->
+            <section class="section">
+                <div class="container">
+                    <div class="section-header">
+                        <h2>L’Unité de Soin Adaptative</h2>
+                        <p>Une solution technique agile conçue pour l'impact humanitaire terrain.</p>
+                    </div>
+                    <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:2rem">
+                        <div class="concept-card card-glass" style="padding:3.5rem 2rem; text-align:center">
+                            <h3 style="color:var(--primary); margin-bottom:1rem">Modularité intuitive</h3>
+                            <p>Utilisation sans formation complexe grâce à une ergonomie simplifiée et des codes couleurs universels.</p>
+                        </div>
+                        <div class="concept-card card-glass" style="padding:3.5rem 2rem; text-align:center">
+                            <h3 style="color:var(--primary); margin-bottom:1rem">Maintenance rapide</h3>
+                            <p>Remplacez un module défectueux instantanément sans immobiliser l'ensemble de l'unité de soin.</p>
+                        </div>
+                        <div class="concept-card card-glass" style="padding:3.5rem 2rem; text-align:center">
+                            <h3 style="color:var(--primary); margin-bottom:1rem">Logistique optimisée</h3>
+                            <p>Unités légères, empilables et conçues pour résister aux conditions climatiques les plus extrêmes.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION TARGET -->
+            <section class="target">
+                <div class="container">
+                    <h2>Conçu pour les acteurs du terrain</h2>
+                    <div class="target-grid">
+                        <div class="target-item"><h4>ONG Humanitaires</h4><p>Réponse rapide en zones de conflit et camps de réfugiés.</p></div>
+                        <div class="target-item"><h4>Associations Médicales</h4><p>Soutien aux infrastructures locales sous-équipées.</p></div>
+                        <div class="target-item"><h4>Santé Locale</h4><p>Solutions durables pour les déserts médicaux isolés.</p></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION CHIFFRES CLÉS -->
+            <section class="section" id="impact-stats">
+                <div class="container">
+                    <div class="section-header">
+                        <h2>Notre impact en chiffres</h2>
+                        <p>Cliquez sur nos déploiements pour visualiser notre présence mondiale en temps réel.</p>
+                    </div>
+                    <div class="stats-grid">
+                        <div class="stat-card clickable" onclick="showPage('map')">
+                            <h3>124</h3>
+                            <p>Stations actives</p>
+                        </div>
+                        <div class="stat-card clickable" onclick="showPage('map')">
+                            <h3>8</h3>
+                            <p>Pays d'intervention</p>
+                        </div>
+                        <div class="stat-card">
+                            <h3>15k</h3>
+                            <p>Patients accompagnés</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION AVIS / TERRAIN -->
+            <section class="section" id="testimonials" style="background: rgba(255,255,255,0.3);">
+                <div class="container">
+                    <div class="section-header">
+                        <h2>Paroles de terrain</h2>
+                        <p>Ceux qui utilisent nos modules au quotidien témoignent de la réalité de l'urgence.</p>
+                    </div>
+                    <div class="testimonials-grid">
+                        <div class="testimonial-card card-glass">
+                            <p class="testimonial-text">"Ce n'est pas juste du matériel, c'est de l'ordre qui revient dans le chaos. Le kit Urgency nous a permis de stabiliser trois victimes de séisme en moins de dix minutes."</p>
+                            <div class="testimonial-author">
+                                <div class="author-info">
+                                    <h5>Dr. Amira K.</h5>
+                                    <p>Médecine d'urgence humanitaire</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="testimonial-card card-glass">
+                            <p class="testimonial-text">"Enfin une solution qui ne nécessite pas trois jours de formation. Les logisticiens apprécient la légèreté, et nous, on apprécie de ne plus chercher nos instruments dans la poussière."</p>
+                            <div class="testimonial-author">
+                                <div class="author-info">
+                                    <h5>Marc-Antoine L.</h5>
+                                    <p>Coordinateur Logistique ONG</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="testimonial-card card-glass">
+                            <p class="testimonial-text">"Le module de Diagnostic change la donne pour le triage. On gagne un temps précieux sur l'orientation des patients, surtout quand les ressources sont limitées."</p>
+                            <div class="testimonial-author">
+                                <div class="author-info">
+                                    <h5>Sarah W.</h5>
+                                    <p>Infirmière de santé publique locale</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="text-align: center;">
+                        <button onclick="showPage('solutions')" class="btn btn-primary" style="padding: 1.4rem 3.5rem;">Découvrir nos solutions</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SOLUTIONS ACCUEIL -->
+            <section class="section">
+                <div class="container">
+                    <div class="section-header"><h2>Gamme de Solutions</h2><p>Cliquez sur un modèle pour découvrir sa fiche technique complète.</p></div>
+                    <div class="solutions-grid">
+                        <div class="solution-card card-glass card-urgency" onclick="showPage('urgency')">
+                            <!-- Retrait du visuel sur la homepage comme demandé -->
+                            <span class="model-badge badge-urgency">Modèle URGENCY</span>
+                            <h3>Urgence</h3><p class="usage">Traumatismes & Hémorragies</p>
+                            <ul class="module-list"><li>Kits de suture</li><li>Hémorragie</li><li>Réanimation</li></ul>
+                        </div>
+                        <div class="solution-card card-glass card-diagnostic" onclick="showPage('diagnostic')">
+                            <span class="model-badge badge-diagnostic">Modèle DIAGNOSTIC</span>
+                            <h3>Diagnostic</h3><p class="usage">Triage & Examens initiaux</p>
+                            <ul class="module-list"><li>Stéthoscope IA</li><li>Thermomètre</li><li>Analyses</li></ul>
+                        </div>
+                        <div class="solution-card card-glass card-suivi" onclick="showPage('suivi')">
+                            <span class="model-badge badge-suivi">Modèle SUIVI</span>
+                            <h3>Suivi</h3><p class="usage">Maladies chroniques</p>
+                            <ul class="module-list"><li>ECG connecté</li><li>Tensiomètre</li><li>Suivi glycémique</li></ul>
+                        </div>
+                        <div class="solution-card card-glass card-prevention" onclick="showPage('prevention')">
+                            <span class="model-badge badge-prevention">Modèle PRÉVENTION</span>
+                            <h3>Prévention</h3><p class="usage">Vaccination & Hygiène</p>
+                            <ul class="module-list"><li>Chaîne du froid</li><li>Tests d'eau</li><li>Éducation</li></ul>
+                        </div>
+                        <div class="solution-card card-glass card-custom" onclick="showPage('custom')">
+                            <span class="model-badge badge-custom">Modèle SUR-MESURE</span>
+                            <h3>Personnalisation</h3><p class="usage">Configurations spécifiques</p>
+                            <ul class="module-list"><li>Besoins atypiques</li><li>Intégration technique</li><li>Co-conception</li></ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- PAGE HISTOIRE -->
+        <div id="page-history" class="page">
+            <section class="section">
+                <div class="container">
+                    <div class="section-header">
+                        <h2>Notre Histoire</h2>
+                        <p>D'une ambition née de l'urgence à une vision durable du soin.</p>
+                    </div>
+                    
+                    <div class="story-container">
+                        <div class="story-section-new">
+                            <span class="story-tag">Origine & Urgence</span>
+                            <h3>
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path></svg>
+                                Rendre les soins accessibles partout
+                            </h3>
+                            <p>L'idée est née d'un constat simple : l'isolement ne doit plus être un obstacle à la dignité médicale. Nous avons vu trop souvent des équipes briller par leur courage, mais <span class="highlight-blue">manquer de moyens adaptés</span>. C’est de cette urgence qu’est née Block Care : une mission visant à garantir que chaque seconde compte, quel que soit le terrain.</p>
+                        </div>
+
+                        <div class="story-section-new">
+                            <span class="story-tag">Innovation</span>
+                            <h3>
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                                La modularité au service de la vie
+                            </h3>
+                            <p>Chaque unité Block Care est un écosystème de <span class="highlight-blue">modules interchangeables</span>. Inspirés par la modularité universelle, nos systèmes permettent aux soignants de s’adapter instantanément. Nous garantissons des données cliniques précises dès les premières secondes d'intervention.</p>
+                        </div>
+
+                        <div class="story-section-new">
+                            <span class="story-tag">Notre Mission</span>
+                            <h3>
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg>
+                                Accompagner les soignants
+                            </h3>
+                            <p>Du camp de réfugiés au village isolé, Block Care redonne le pouvoir d'agir aux professionnels. Notre mission va au-delà du produit : nous offrons aux équipes humanitaires les moyens d’agir <span class="highlight-blue">vite, efficacement et en toute sécurité</span>. Nous travaillons main dans la main avec les ONG pour optimiser chaque intervention terrain.</p>
+                        </div>
+
+                        <div class="story-section-new">
+                            <span class="story-tag">Notre Vision</span>
+                            <h3>
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path>
+                                </svg>
+                                L'humain au centre
+                            </h3>
+                            <p>Block Care, c’est avant tout une vision : celle d’un monde où l'accès aux soins dépend de la volonté d'aider, pas de la géographie. Chaque détail est pensé pour <span class="highlight-blue">placer l'humain au centre</span>, en simplifiant la vie des équipes et en garantissant la dignité médicale pour tous les soignants du monde.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- PAGE FAQ -->
+        <div id="page-faq" class="page">
+            <section class="section">
+                <div class="container">
+                    <div class="section-header">
+                        <h2>Foire Aux Questions</h2>
+                        <p>Tout ce qu'il faut savoir sur l'écosystème Block Care.</p>
+                    </div>
+
+                    <div class="faq-wrapper">
+                        <!-- Catégorie 1 -->
+                        <div class="faq-category">
+                            <h3>Le Concept & La Mission</h3>
+                            <div class="faq-item">
+                                <span class="faq-question">Qu'est-ce que Block Care concrètement ?</span>
+                                <p class="faq-answer">Block Care est un système médical modulaire conçu pour les environnements extrêmes ou isolés. Il se compose d'unités de transport robustes contenant des blocs techniques interchangeables, permettant de transformer une simple malle en station de soin spécialisée en quelques secondes.</p>
+                            </div>
+                            <div class="faq-item">
+                                <span class="faq-question">Pourquoi ce système est-il nécessaire sur le terrain ?</span>
+                                <p class="faq-answer">La logistique humanitaire est souvent entravée par le poids et l'encombrement du matériel. Block Care résout ce problème par la modularité : on n'emporte que le bloc nécessaire à la mission (Urgence, Suivi, etc.), optimisant ainsi le transport et la réactivité des équipes.</p>
+                            </div>
+                        </div>
+
+                        <!-- Catégorie 2 -->
+                        <div class="faq-category">
+                            <h3>Utilisation & Terrains</h3>
+                            <div class="faq-item">
+                                <span class="faq-question">Qui est habilité à utiliser les unités Block Care ?</span>
+                                <p class="faq-answer">Le système est conçu pour être intuitif. S'il est principalement destiné au personnel médical formé (médecins, infirmiers), l'ergonomie simplifiée permet à des logisticiens humanitaires d'assurer la mise en place et la maintenance de premier niveau après une courte formation.</p>
+                            </div>
+                            <div class="faq-item">
+                                <span class="faq-question">Quels sont les contextes de déploiement privilégiés ?</span>
+                                <p class="faq-answer">Block Care excelle dans les "zones blanches" médicales : camps de réfugiés, zones de catastrophes naturelles, postes avancés en zones de conflit ou villages isolés dépourvus d'infrastructures de santé permanentes.</p>
+                            </div>
+                        </div>
+
+                        <!-- Catégorie 3 -->
+                        <div class="faq-category">
+                            <h3>Modularité & Personnalisation</h3>
+                            <div class="faq-item">
+                                <span class="faq-question">Comment fonctionne l'interchangeabilité des modules ?</span>
+                                <p class="faq-answer">Chaque malle Block Care possède un châssis standardisé. Les modules techniques (électronique, instruments, consommables) se clipsent instantanément via un système de rails sécurisés. On peut ainsi transformer une unité de Diagnostic en unité de Suivi par simple remplacement de bloc.</p>
+                            </div>
+                            <div class="faq-item">
+                                <span class="faq-question">Est-il possible de commander des modules spécifiques ?</span>
+                                <p class="faq-answer">Oui. Notre gamme "SUR-MESURE" permet de co-concevoir des modules adaptés à des besoins locaux très spécifiques (santé maternelle, analyse d'eau, chirurgie mineure) en intégrant des instruments tiers sur notre châssis standard.</p>
+                            </div>
+                        </div>
+
+                        <!-- Catégorie 4 -->
+                        <div class="faq-category">
+                            <h3>Hygiène, Sécurité & Robustesse</h3>
+                            <div class="faq-item">
+                                <span class="faq-question">Comment est assurée l'hygiène du matériel en milieu poussiéreux ?</span>
+                                <p class="faq-answer">Les unités sont conçues avec des matériaux polymères haute densité, non poreux et lavables. Les joints d'étanchéité garantissent une protection IP65 contre la poussière et l'humidité lorsqu'elles sont fermées. Chaque module interne est compatible avec les protocoles de désinfection hospitalière standard.</p>
+                            </div>
+                            <div class="faq-item">
+                                <span class="faq-question">Quelle est la durée de vie moyenne d'une unité sur le terrain ?</span>
+                                <p class="faq-answer">La structure externe est quasi-indestructible et garantie 10 ans. Les modules techniques sont conçus pour supporter des cycles d'utilisation intensifs (environ 5000 interventions) et sont facilement réparables ou remplaçables sans changer l'ensemble du système.</p>
+                            </div>
+                        </div>
+
+                        <!-- Catégorie 5 -->
+                        <div class="faq-category">
+                            <h3>Technologie & Données</h3>
+                            <div class="faq-item">
+                                <span class="faq-question">Comment sont gérées les données médicales des patients ?</span>
+                                <p class="faq-answer">La sécurité des données est une priorité. Les unités disposent d'un stockage local chiffré. En cas de connexion satellite ou GSM, les données sont synchronisées vers des serveurs sécurisés certifiés HDS, en totale conformité avec le RGPD.</p>
+                            </div>
+                            <div class="faq-item">
+                                <span class="faq-question">Le système a-t-il besoin d'une source d'énergie constante ?</span>
+                                <p class="faq-answer">Les modules actifs disposent de batteries internes offrant jusqu'à 72h d'autonomie. Ils sont rechargeables via panneau solaire portable, allume-cigare de véhicule ou secteur, garantissant un fonctionnement continu même en cas de coupure totale d'infrastructure.</p>
+                            </div>
+                        </div>
+
+                        <!-- Catégorie 6 -->
+                        <div class="faq-category">
+                            <h3>Tarification & Accessibilité</h3>
+                            <div class="faq-item">
+                                <span class="faq-question">Quels sont les tarifs des unités Block Care ?</span>
+                                <p class="faq-answer">Parce que chaque mission humanitaire est unique, nous n'appliquons pas de tarification fixe catalogue. Nos prix sont calculés sur-mesure en fonction du nombre de modules, de la durée du déploiement et de la complexité logistique de la zone d'intervention.</p>
+                            </div>
+                            <div class="faq-item">
+                                <span class="faq-question">Comment vous adaptez-vous aux organisations à budget limité ?</span>
+                                <p class="faq-answer">L'équité est au cœur de notre modèle. Nous nous adaptons à toute éventualité en proposant des modèles économiques flexibles : achat direct, location longue durée pour des missions spécifiques, ou mise à disposition via des fonds de subvention pour les acteurs de santé locaux les plus fragiles.</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="text-align: center; margin-top: 3rem;">
+                        <button onclick="showPage('contact')" class="btn btn-primary">Une autre question ? Nous contacter</button>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- PAGE CARTE DES DÉPLOIEMENTS (VRAIE CARTE INTERACTIVE) -->
+        <div id="page-map" class="page">
+            <section class="section">
+                <div class="container">
+                    <div class="btn-back" onclick="showPage('home')">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                        Retour
+                    </div>
+                    <div class="section-header">
+                        <h2>Présence mondiale</h2>
+                        <p>Cartographie des 124 stations actives déployées auprès de nos partenaires humanitaires.</p>
+                    </div>
+                    <div id="map-element"></div>
+                </div>
+            </section>
+        </div>
+
+        <!-- PAGE SOLUTIONS (Catalogue avec visuels) -->
+        <div id="page-solutions" class="page">
+            <section class="section">
+                <div class="container">
+                    <div class="section-header">
+                        <h2>Toutes nos Solutions</h2>
+                        <p>Découvrez l'ensemble de notre gamme d'unités de soin modulaires.</p>
+                    </div>
+                    <div class="solutions-grid">
+                        <div class="solution-card card-glass card-urgency" onclick="showPage('urgency')">
+                            <div class="card-image-thumb"><img src="image_6a87c2.jpg" alt="Urgency"></div>
+                            <span class="model-badge badge-urgency">Modèle URGENCY</span>
+                            <h3>Urgence</h3><p class="usage">Traumatismes & Hémorragies</p>
+                            <ul class="module-list"><li>Kits de suture</li><li>Hémorragie</li><li>Réanimation</li></ul>
+                        </div>
+                        <div class="solution-card card-glass card-diagnostic" onclick="showPage('diagnostic')">
+                            <div class="card-image-thumb"><img src="diagnostic - face fermé .jpg" alt="Diagnostic"></div>
+                            <span class="model-badge badge-diagnostic" style="background:rgba(236,201,75,0.15);color:#975A16">Modèle DIAGNOSTIC</span>
+                            <h3>Diagnostic</h3><p class="usage">Triage & Analyse</p>
+                            <ul class="module-list"><li>Stéthoscope IA</li><li>Thermomètre</li><li>Analyses</li></ul>
+                        </div>
+                        <div class="solution-card card-glass card-suivi" onclick="showPage('suivi')">
+                            <div class="card-image-thumb"><img src="suivi - motion .jpg" alt="Suivi"></div>
+                            <span class="model-badge badge-suivi" style="background:rgba(49,130,206,0.15);color:var(--suivi)">Modèle SUIVI</span>
+                            <h3>Suivi</h3><p class="usage">Maladies chroniques</p>
+                            <ul class="module-list"><li>ECG connecté</li><li>Tensiomètre</li><li>Monitoring</li></ul>
+                        </div>
+                        <div class="solution-card card-glass card-prevention" onclick="showPage('prevention')">
+                            <div class="card-image-thumb"><img src="prévention - 3:4.jpg" alt="Prevention"></div>
+                            <span class="model-badge badge-prevention" style="background:rgba(56, 161, 105, 0.15);color:var(--prevention)">Modèle PRÉVENTION</span>
+                            <h3>Prévention</h3><p class="usage">Vaccination & Hygiène</p>
+                            <ul class="module-list"><li>Chaîne du froid</li><li>Tests d'eau</li><li>Hygiène</li></ul>
+                        </div>
+                        <div class="solution-card card-glass card-custom" onclick="showPage('custom')">
+                            <div class="card-image-thumb"><img src="visuBlockcare .jpg" alt="Custom"></div>
+                            <span class="model-badge badge-custom" style="background:rgba(113,128,150,0.15);color:var(--custom)">SUR-MESURE</span>
+                            <h3>Personnalisation</h3><p class="usage">Configurations spécifiques</p>
+                            <ul class="module-list"><li>Modules spéciaux</li><li>Sur-mesure</li><li>Co-conception</li></ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- PAGE MENTIONS LÉGALES (Détails) -->
+        <div id="page-legal" class="page">
+            <section class="section">
+                <div class="container">
+                    <div class="btn-back" onclick="showPage('home')">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                        Retour
+                    </div>
+                    <div class="section-header">
+                        <h2>Mentions Légales</h2>
+                        <p>Informations réglementaires et protection des données.</p>
+                    </div>
+                    <div class="card-glass" style="padding: 4rem; line-height: 2;">
+                        <h3 style="color: var(--primary); margin-bottom: 1rem;">1. Éditeur du site</h3>
+                        <p>Le présent site est édité par la société Block Care SAS, au capital de 50 000 €, dont le siège social est situé au 55 Rue de la Verrerie, 75004 Paris. Immatriculée au RCS de Paris sous le numéro 123 456 789.</p>
+                        <p>Responsable de la publication : Direction de la Communication Block Care.</p>
+                        
+                        <h3 style="color: var(--primary); margin-top: 2rem; margin-bottom: 1rem;">2. Hébergement</h3>
+                        <p>Le site est hébergé par des serveurs haute sécurité certifiés HDS (Hébergeur de Données de Santé) situés en France métropolitaine, garantissant l'intégrité et la protection des données médicales.</p>
+
+                        <h3 style="color: var(--primary); margin-top: 2rem; margin-bottom: 1rem;">3. Propriété intellectuelle</h3>
+                        <p>L'ensemble du contenu (textes, images, graphismes, logo, icônes) est la propriété exclusive de Block Care. Toute reproduction, même partielle, est interdite sans autorisation préalable.</p>
+
+                        <h3 style="color: var(--primary); margin-top: 2rem; margin-bottom: 1rem;">4. Protection des données (RGPD)</h3>
+                        <p>Block Care s'engage à respecter la confidentialité de vos données personnelles conformément au Règlement Général sur la Protection des Données (RGPD). Les données collectées via nos formulaires ne sont jamais cédées à des tiers et servent uniquement à la gestion de vos demandes.</p>
+                        <p>Pour toute question : <a href="mailto:contact@blockcare.org" style="color: var(--primary); font-weight: 700;">contact@blockcare.org</a></p>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- PAGE DON -->
+        <div id="page-donate" class="page">
+            <section class="section">
+                <div class="container">
+                    <div class="section-header">
+                        <h2>Soutenir Block Care</h2>
+                        <p>Votre don permet de déployer des unités de soin là où elles sauvent des vies.</p>
+                    </div>
+                    <div class="donate-container">
+                        <div class="donate-info">
+                            <h3>Pourquoi donner ?</h3>
+                            <p>Block Care est un projet à but non lucratif. Chaque euro est investi dans le matériel médical de pointe et le déploiement sur le terrain.</p>
+                            <!-- Feature ✨ Gemini: Impact Calculator -->
+                            <div id="ai-impact-section" style="margin-top:2rem; padding:1.5rem; background:rgba(255,255,255,0.1); border-radius:15px">
+                                <p style="font-weight:700; font-size:0.9rem; margin-bottom:0.5rem">✨ Quel impact pour mon don ?</p>
+                                <button class="btn btn-ai" style="padding:0.6rem 1rem; font-size:0.8rem" onclick="generateDonationImpact()">Calculer l'impact ✨</button>
+                                <div id="ai-impact-loader" class="loader-dots"><div></div><div></div><div></div></div>
+                                <div id="ai-impact-result" style="font-size:0.85rem; margin-top:10px; font-style:italic; line-height:1.4"></div>
+                            </div>
+                        </div>
+                        <div class="donate-form">
+                            <div class="donate-tabs">
+                                <div class="tab-btn active" onclick="toggleDonation(this)">Don ponctuel</div>
+                                <div class="tab-btn" onclick="toggleDonation(this)">Don mensuel</div>
+                            </div>
+                            <div class="amount-grid">
+                                <div class="amount-btn active" onclick="selectAmount(this, 30)">30 €</div>
+                                <div class="amount-btn" onclick="selectAmount(this, 50)">50 €</div>
+                                <div class="amount-btn" onclick="selectAmount(this, 100)">100 €</div>
+                                <div class="amount-btn" onclick="selectAmount(this, 250)">250 €</div>
+                            </div>
+                            <div class="custom-amount">
+                                <input type="number" id="custom-amount-input" placeholder="Montant libre" onfocus="clearAmountBtns()">
+                                <span>€</span>
+                            </div>
+
+                            <!-- SECTION PAIEMENT SIMPLIFIÉ -->
+                            <div style="margin-bottom: 2rem;">
+                                <p style="font-size: 0.75rem; font-weight: 800; color: var(--text-light); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 1rem; text-align: center;">Paiement simplifié</p>
+                                <div style="display: flex; gap: 0.8rem; justify-content: center; margin-bottom: 1.5rem;">
+                                    <button class="btn" style="flex: 1; background: #000; color: #fff; padding: 0.8rem; display: flex; align-items: center; justify-content: center; border-radius: 12px; min-width: 0;" onclick="showPage('donate-success')">
+                                        <svg width="22" height="22" viewBox="0 0 512 512" fill="white"><path d="M375.4,249.2c-0.2-61.9,50.7-91.8,53-93.1c-28.7-42-73.4-47.7-89.3-48.4c-38-3.9-74,22.2-93.2,22.2 c-19.3,0-48.7-21.8-80.1-21.2c-41.2,0.6-79.1,24.1-100.2,60.8c-42.7,74.2-11,184,30.5,243.9c20.3,29.3,44.5,62.2,76.1,61 c30.5-1.2,42-19.6,78.9-19.6s47.3,19.6,79.4,18.9c32.6-0.6,53.8-29.6,73.8-59c23.2-33.9,32.7-66.7,33.2-68.3 C447.1,345.5,375.5,317.9,375.4,249.2z M322.2,102.2c17.1-20.8,28.7-49.6,25.5-78.2c-24.5,1-54.3,16.3-71.9,36.8 c-15.8,18.1-29.6,47.8-25.9,75.4C275.6,138.1,305.1,122.9,322.2,102.2z"/></svg>
+                                    </button>
+                                    <button class="btn" style="flex: 1; background: #fff; border: 1px solid #ddd; color: #5f6368; padding: 0.8rem; display: flex; align-items: center; justify-content: center; border-radius: 12px; min-width: 0;" onclick="showPage('donate-success')">
+                                        <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.13-.45-4.65H24v9.03h12.91c-.58 3.07-2.26 5.67-4.81 7.42l7.74 6c4.51-4.18 7.14-10.32 7.14-17.8z"/><path fill="#FBBC05" d="M10.54 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24s.92 7.54 2.56 10.78l7.98-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.74-6c-2.2 1.47-5.01 2.31-8.15 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+                                    </button>
+                                    <button class="btn" style="flex: 1; background: #ffc439; color: #003087; padding: 0.8rem; display: flex; align-items: center; justify-content: center; border-radius: 12px; min-width: 0;" onclick="showPage('donate-success')">
+                                        <span style="font-style: italic; font-weight: 900; font-family: sans-serif; font-size: 0.9rem;">PayPal</span>
+                                    </button>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem;">
+                                    <div style="flex: 1; height: 1px; background: rgba(0,0,0,0.05);"></div>
+                                    <span style="font-size: 0.7rem; font-weight: 700; color: var(--text-light); opacity: 0.5;">OU</span>
+                                    <div style="flex: 1; height: 1px; background: rgba(0,0,0,0.05);"></div>
+                                </div>
+                            </div>
+
+                            <button class="btn btn-primary" style="width: 100%; padding: 1.5rem; font-size: 1.1rem;" onclick="showPage('donate-info')">Valider mon don sécurisé</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- PAGE DON - INFORMATIONS -->
+        <div id="page-donate-info" class="page">
+            <section class="section">
+                <div class="container">
+                    <div class="section-header">
+                        <h2>Vos informations</h2>
+                        <p>Pour finaliser votre don et recevoir votre reçu fiscal.</p>
+                    </div>
+                    <div class="card-glass" style="max-width: 600px; margin: 0 auto; padding: 4rem;">
+                        <form onsubmit="return false;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+                                <div class="form-group"><label style="display:block; font-weight:600; margin-bottom:0.5rem">Prénom</label><input type="text" placeholder="Ex: Jean"></div>
+                                <div class="form-group"><label style="display:block; font-weight:600; margin-bottom:0.5rem">Nom</label><input type="text" placeholder="Ex: Dupont"></div>
+                            </div>
+                            <div class="form-group" style="margin-bottom:2rem"><label style="display:block; font-weight:600; margin-bottom:0.5rem">Adresse Email</label><input type="email" placeholder="Ex: jean.dupont@email.com"></div>
+                            <button class="btn btn-primary" style="width:100%; padding: 1.2rem;" onclick="showPage('donate-success')">Confirmer mon don</button>
+                            <p style="text-align: center; font-size: 0.8rem; margin-top: 1.5rem; color: var(--text-light); opacity: 0.7;">Paiement sécurisé par protocole SSL chiffré.</p>
+                        </form>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- SUCCESS PAGE -->
+        <div id="page-donate-success" class="page">
+            <section class="section">
+                <div class="container" style="text-align:center">
+                    <div class="card-glass" style="max-width:600px; margin: 0 auto; padding: 4rem;">
+                        <div style="background: rgba(0, 108, 206, 0.1); width: 110px; height: 110px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 2.5rem; box-shadow: 0 10px 25px rgba(0, 108, 206, 0.15);">
+                            <svg width="60" height="60" viewBox="0 0 24 24" fill="var(--primary)" fill-opacity="0.2" stroke="var(--primary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 2px 4px rgba(0, 108, 206, 0.2));">
+                                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path>
+                            </svg>
+                        </div>
+                        <h2 style="margin:1.5rem 0">Merci pour votre don !</h2>
+                        <p>Votre générosité sauve des vies. Un reçu fiscal vous a été envoyé par email.</p>
+                        <button class="btn btn-primary" style="margin-top:2rem" onclick="showPage('home')">Retour à l'accueil</button>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- PAGE CONTACT -->
+        <div id="page-contact" class="page">
+            <section class="section">
+                <div class="container">
+                    <div class="contact-content">
+                        <h2>Collaborons pour le terrain</h2>
+                        <p>Vous représentez une ONG ou une organisation de santé locale ?<br>Contactez-nous pour échanger sur vos besoins spécifiques et évaluer un déploiement.</p>
+                        <a href="mailto:contact@blockcare.org" class="btn btn-primary" style="padding: 1.5rem 4rem; font-size: 1.1rem;">Nous contacter par email</a>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- FICHES DÉTAILLÉES (DASHBOARD) -->
+        <!-- Urgency -->
+        <div id="page-urgency" class="page">
+            <section class="section">
+                <div class="container">
+                    <div class="btn-back" onclick="showPage('home')">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                        Retour au catalogue
+                    </div>
+                    <div class="card-glass" style="padding: 4rem;">
+                        <div class="solution-detail-wrapper">
+                            <div class="solution-hero-split">
+                                <div class="solution-visual-box">
+                                    <!-- Carrousel Urgency -->
+                                    <div class="carousel-container" id="urgency-carousel">
+                                        <div class="carousel-slides">
+                                            <div class="carousel-slide"><img src="urgency - face.jpg" alt="Kit Urgency Face"></div>
+                                            <div class="carousel-slide"><img src="urgency - mise en situation 2.jpg" alt="Kit Urgency Situation"></div>
+                                            <div class="carousel-slide"><img src="image_6a87c2.jpg" alt="Kit Urgency"></div>
+                                        </div>
+                                        <button class="carousel-btn carousel-prev" onclick="moveUrgencySlide(-1)">❮</button>
+                                        <button class="carousel-btn carousel-next" onclick="moveUrgencySlide(1)">❯</button>
+                                    </div>
+                                </div>
+                                <div class="solution-main-info">
+                                    <span class="model-badge badge-urgency">Gamme URGENCY</span>
+                                    <h2 class="intro-text-bold">Stabilisation immédiate des patients en contexte critique.</h2>
+                                    <button onclick="showPage('register')" class="btn btn-primary" style="width: 100%;">Évaluer un déploiement</button>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 style="margin-bottom: 2rem; color: var(--urgency); font-size: 0.9rem; font-weight: 800; text-transform: uppercase;">UNITÉ URGENCY — Caractéristiques clés</h3>
+                                <div class="specs-dashboard">
+                                    <div class="spec-item-card"><span class="spec-label">Objectif</span><p class="spec-value">Stabilisation critique</p></div>
+                                    <div class="spec-item-card"><span class="spec-label">Déploiement</span><p class="spec-value">< 2 minutes</p></div>
+                                    <div class="spec-item-card"><span class="spec-label">Opérateurs</span><p class="spec-value">1 à 2 intervenants</p></div>
+                                    <div class="spec-item-card"><span class="spec-label">Organisation</span><p class="spec-value">Mousse haute densité sur-mesure</p></div>
+                                    <div class="spec-item-card"><span class="spec-label">Contenu</span><p class="spec-value">Suture, Hémostase, Réanimation</p></div>
+                                    <div class="spec-item-card"><span class="spec-label">Résistance</span><p class="spec-value">Poussière, Humidité, Chocs</p></div>
+                                    <div class="spec-item-card"><span class="spec-label">Nettoyage</span><p class="spec-value">Surfaces lavables, Désinfection</p></div>
+                                    <div class="spec-item-card"><span class="spec-label">Usage terrain</span><p class="spec-value">Urgences, Premières heures</p></div>
+                                </div>
+                            </div>
+                            <div class="solution-footer-nav">
+                                <p style="font-size: 0.8rem; font-weight: 700; opacity: 0.6;">Suggestions :</p>
+                                <div class="suggestions-row">
+                                    <button class="btn-suggestion sugg-diag" onclick="showPage('diagnostic')">Diagnostic</button>
+                                    <button class="btn-suggestion sugg-sui" onclick="showPage('suivi')">Suivi</button>
+                                    <button class="btn-suggestion sugg-prev" onclick="showPage('prevention')">Prévention</button>
+                                    <button class="btn-suggestion sugg-cust" onclick="showPage('custom')">Sur-mesure</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Diagnostic Detail -->
+        <div id="page-diagnostic" class="page">
+            <section class="section">
+                <div class="container">
+                    <div class="btn-back" onclick="showPage('home')">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                        Retour au catalogue
+                    </div>
+                    <div class="card-glass" style="padding: 4rem;">
+                        <div class="solution-detail-wrapper">
+                            <div class="solution-hero-split">
+                                <div class="solution-visual-box">
+                                    <!-- Carrousel Diagnostic -->
+                                    <div class="carousel-container" id="diagnostic-carousel">
+                                        <div class="carousel-slides">
+                                            <div class="carousel-slide"><img src="diagnostic - face fermé .jpg" alt="Kit Diagnostic Face"></div>
+                                            <div class="carousel-slide"><img src="diagnostic - mise en situation 1 .jpg" alt="Kit Diagnostic Situation"></div>
+                                            <div class="carousel-slide"><img src="diagnostic - ouverte .jpg" alt="Kit Diagnostic Ouvert"></div>
+                                        </div>
+                                        <button class="carousel-btn carousel-prev" onclick="moveDiagnosticSlide(-1)">❮</button>
+                                        <button class="carousel-btn carousel-next" onclick="moveDiagnosticSlide(1)">❯</button>
+                                    </div>
+                                </div>
+                                <div class="solution-main-info">
+                                    <span class="model-badge badge-diagnostic" style="background:rgba(236,201,75,0.15);color:#975A16">Gamme DIAGNOSTIC</span>
+                                    <h2 class="intro-text-bold">Aide au diagnostic mobile et orientation précise du patient.</h2>
+                                    <button onclick="showPage('register')" class="btn btn-primary" style="width: 100%;">Évaluer un déploiement</button>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 style="margin-bottom: 2rem; color: #975A16; font-size: 0.9rem; font-weight: 800; text-transform: uppercase;">UNITÉ DIAGNOSTIC — Caractéristiques clés</h3>
+                                <div class="specs-dashboard">
+                                    <div class="spec-item-card"><span class="spec-label">Objectif</span><p class="spec-value">Aide au diagnostic & Orientation</p></div>
+                                    <div class="spec-item-card"><span class="spec-label">Déploiement</span><p class="spec-value">< 3 minutes</p></div>
+                                    <div class="spec-item-card"><span class="spec-label">Opérateurs</span><p class="spec-value">Personnel médical formé</p></div>
+                                    <div class="spec-item-card"><span class="spec-label">Organisation</span><p class="spec-value">Rangement structuré, Accès rapide</p></div>
+                                    <div class="spec-item-card"><span class="spec-label">Mesures</span><p class="spec-value">Non invasives, Évaluations initiales</p></div>
+                                    <div class="spec-item-card"><span class="spec-label">Autonomie</span><p class="spec-value">Compatible terrain, Faible dépendance</p></div>
+                                    <div class="spec-item-card"><span class="spec-label">Nettoyage</span><p class="spec-value">Compatible protocoles médicaux</p></div>
+                                    <div class="spec-item-card"><span class="spec-label">Usage terrain</span><p class="spec-value">Triage, Diagnostic initial</p></div>
+                                </div>
+                            </div>
+                            <div class="solution-footer-nav">
+                                <p style="font-size: 0.8rem; font-weight: 700; opacity: 0.6;">Suggestions :</p>
+                                <div class="suggestions-row">
+                                    <button class="btn-suggestion sugg-urg" onclick="showPage('urgency')">Urgency</button>
+                                    <button class="btn-suggestion sugg-sui" onclick="showPage('suivi')">Suivi</button>
+                                    <button class="btn-suggestion sugg-prev" onclick="showPage('prevention')">Prévention</button>
+                                    <button class="btn-suggestion sugg-cust" onclick="showPage('custom')">Sur-mesure</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Suivi Detail -->
+        <div id="page-suivi" class="page">
+            <section class="section">
+                <div class="container">
+                    <div class="btn-back" onclick="showPage('home')">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                        Retour au catalogue
+                    </div>
+                    <div class="card-glass" style="padding: 4rem;">
+                        <div class="solution-detail-wrapper">
+                            <div class="solution-hero-split">
+                                <div class="solution-visual-box">
+                                    <!-- Carrousel Suivi -->
+                                    <div class="carousel-container" id="suivi-carousel">
+                                        <div class="carousel-slides">
+                                            <div class="carousel-slide"><img src="suivi - motion .jpg" alt="Kit Suivi Motion"></div>
+                                            <div class="carousel-slide"><img src="suivi - mise en situation mains 2.jpg" alt="Kit Suivi Mains"></div>
+                                            <div class="carousel-slide"><img src="suivi - mise en situation 2 .jpg" alt="Kit Suivi Clinique"></div>
+                                        </div>
+                                        <button class="carousel-btn carousel-prev" onclick="moveSuiviSlide(-1)">❮</button>
+                                        <button class="carousel-btn carousel-next" onclick="moveSuiviSlide(1)">❯</button>
+                                    </div>
+                                </div>
+                                <div class="solution-main-info">
+                                    <span class="model-badge badge-suivi" style="background:rgba(49,130,206,0.15);color:var(--suivi)">Gamme SUIVI</span>
+                                    <h2 class="intro-text-bold">Surveillance de l’état et suivi clinique post-urgence.</h2>
+                                    <button onclick="showPage('register')" class="btn btn-primary" style="width: 100%;">Évaluer un déploiement</button>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 style="margin-bottom: 2rem; color: var(--suivi); font-size: 0.9rem; font-weight: 800; text-transform: uppercase;">UNITÉ SUIVI — Caractéristiques clés</h3>
+                                <div class="specs-dashboard">
+                                    <div class="spec-item-card"><span class="spec-label">Objectif</span><p class="spec-value">Suivi et surveillance continue</p></div>
+                                    <div class="spec-item-card"><span class="spec-label">Déploiement</span><p class="spec-value">Simple et progressif</p></div>
+                                    <div class="spec-item-card"><span class="spec-label">Opérateurs</span><p class="spec-value">Personnel médical ou paramédical</p></div>
+                                    <div class="spec-item-card"><span class="spec-label">Organisation</span><p class="spec-value">Compartiments modulaires protégés</p></div>
+                                    <div class="spec-item-card"><span class="spec-label">Fonctions</span><p class="spec-value">Suivi des constantes, Observation</p></div>
+                                    <div class="spec-item-card"><span class="spec-label">Autonomie</span><p class="spec-value">Ressources limitées compatibles</p></div>
+                                    <div class="spec-item-card"><span class="spec-label">Nettoyage</span><p class="spec-value">Protocoles simples, Usage répété</p></div>
+                                    <div class="spec-item-card"><span class="spec-label">Usage terrain</span><p class="spec-value">Post-urgence, Suivi terrain</p></div>
+                                </div>
+                            </div>
+                            <div class="solution-footer-nav">
+                                <p style="font-size: 0.8rem; font-weight: 700; opacity: 0.6;">Suggestions :</p>
+                                <div class="suggestions-row">
+                                    <button class="btn-suggestion sugg-urg" onclick="showPage('urgency')">Urgency</button>
+                                    <button class="btn-suggestion sugg-diag" onclick="showPage('diagnostic')">Diagnostic</button>
+                                    <button class="btn-suggestion sugg-prev" onclick="showPage('prevention')">Prévention</button>
+                                    <button class="btn-suggestion sugg-cust" onclick="showPage('custom')">Sur-mesure</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Prevention Detail -->
+        <div id="page-prevention" class="page">
+            <section class="section">
+                <div class="container">
+                    <div class="btn-back" onclick="showPage('home')">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                        Retour au catalogue
+                    </div>
+                    <div class="card-glass" style="padding: 4rem;">
+                        <div class="solution-detail-wrapper">
+                            <div class="solution-hero-split">
+                                <div class="solution-visual-box">
+                                    <!-- Carrousel Prevention -->
+                                    <div class="carousel-container" id="prevention-carousel">
+                                        <div class="carousel-slides">
+                                            <div class="carousel-slide"><img src="prévention - 3:4.jpg" alt="Kit Prévention Face"></div>
+                                            <div class="carousel-slide"><img src="prévention - mise en situation 1 .jpg" alt="Kit Prévention Situation"></div>
+                                            <div class="carousel-slide"><img src="prévention - ouverte .jpg" alt="Kit Prévention Ouvert"></div>
+                                        </div>
+                                        <button class="carousel-btn carousel-prev" onclick="movePreventionSlide(-1)">❮</button>
+                                        <button class="carousel-btn carousel-next" onclick="movePreventionSlide(1)">❯</button>
+                                    </div>
+                                </div>
+                                <div class="solution-main-info">
+                                    <span class="model-badge badge-prevention" style="background:rgba(56, 161, 105, 0.15);color:var(--prevention)">Gamme PRÉVENTION</span>
+                                    <h2 class="intro-text-bold">Soins de base et réduction des risques communautaires.</h2>
+                                    <button onclick="showPage('register')" class="btn btn-primary" style="width: 100%;">Évaluer un déploiement</button>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 style="margin-bottom: 2rem; color: var(--prevention); font-size: 0.9rem; font-weight: 800; text-transform: uppercase;">UNITÉ PRÉVENTION — Caractéristiques clés</h3>
+                                <div class="specs-dashboard">
+                                    <div class="spec-item-card"><span class="spec-label">Objectif</span><p class="spec-value">Prévention & Réduction des risques</p></div>
+                                    <div class="spec-item-card"><span class="spec-label">Déploiement</span><p class="spec-value">Rapide, Usage collectif</p></div>
+                                    <div class="spec-item-card"><span class="spec-label">Opérateurs</span><p class="spec-value">Équipes médicales & humanitaires</p></div>
+                                    <div class="spec-item-card"><span class="spec-label">Organisation</span><p class="spec-value">Stockage sécurisé et modulable</p></div>
+                                    <div class="spec-item-card"><span class="spec-label">Contenu</span><p class="spec-value">Matériel de prévention essentiel</p></div>
+                                    <div class="spec-item-card"><span class="spec-label">Conservation</span><p class="spec-value">Stockage longue durée adapté</p></div>
+                                    <div class="spec-item-card"><span class="spec-label">Nettoyage</span><p class="spec-value">Surfaces résistantes, Simple</p></div>
+                                    <div class="spec-item-card"><span class="spec-label">Usage terrain</span><p class="spec-value">Campagnes sanitaires, Zones isolées</p></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Custom Detail -->
+        <div id="page-custom" class="page">
+            <section class="section">
+                <div class="container">
+                    <div class="btn-back" onclick="showPage('home')">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                        Retour au catalogue
+                    </div>
+                    <div class="card-glass" style="padding: 4rem;">
+                        <div class="solution-detail-wrapper">
+                            <div class="solution-hero-split">
+                                <div class="solution-visual-box"><img src="visuBlockcare .jpg" alt="Kit Sur-mesure"></div>
+                                <div class="solution-main-info">
+                                    <span class="model-badge badge-custom" style="background:rgba(113,128,150,0.15);color:var(--custom)">Gamme SUR-MESURE</span>
+                                    <h2 class="intro-text-bold">Adaptation technologique à vos protocoles uniques.</h2>
+                                    <button onclick="showPage('register')" class="btn btn-primary" style="width: 100%;">Évaluer un déploiement</button>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 style="margin-bottom: 2rem; color: var(--custom); font-size: 0.9rem; font-weight: 800; text-transform: uppercase;">Service de conception</h3>
+                                <div class="specs-dashboard">
+                                    <div class="spec-item-card"><span class="spec-label">Co-développement</span><p class="spec-value">Modules spécialisés</p></div>
+                                    <div class="spec-item-card"><span class="spec-label">Intégration</span><p class="spec-value">Dispositifs techniques tiers</p></div>
+                                    <div class="spec-item-card"><span class="spec-label">Adaptation</span><p class="spec-value">Climats & Terrains atypiques</p></div>
+                                    <div class="spec-item-card"><span class="spec-label">Logiciel</span><p class="spec-value">Configuration digitale sur-mesure</p></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- PAGE INSCRIPTION / DEMANDE UNITÉ -->
+        <div id="page-register" class="page">
+            <section class="section">
+                <div class="container">
+                    <div class="section-header"><h2>Demande d'unités de soin</h2><p>Veuillez renseigner ce formulaire officiel pour initier le processus.</p></div>
+                    <div class="card-glass register-container" style="max-width: 700px; margin: 0 auto; padding: 4rem;">
+                        <form onsubmit="return false;">
+                            <div class="form-group"><label>Organisation / ONG</label><input type="text" placeholder="Ex: MSF"></div>
+                            <div class="form-group">
+                                <label>Contexte de mission</label>
+                                <textarea id="mission-context" rows="4" placeholder="Description de l'urgence..."></textarea>
+                                <!-- Feature ✨ Gemini: Refine Mission -->
+                                <button class="btn-ai" style="margin-top:10px" onclick="refineMissionRequest()">Aide-moi à rédiger ✨</button>
+                                <div id="ai-refine-loader" class="loader-dots"><div></div><div></div><div></div></div>
+                                <div id="ai-refine-result" class="ai-result-box">
+                                    <p style="font-weight:800; font-size:0.8rem; color:#764ba2; text-transform:uppercase; margin-bottom:5px">Suggestion IA ✨</p>
+                                    <div id="ai-refine-text" style="font-size:0.9rem; margin-bottom:15px"></div>
+                                    <button class="btn btn-secondary" style="padding:0.4rem 0.8rem; font-size:0.75rem" onclick="applyAiRefinement()">Utiliser cette version</button>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Modèle souhaité</label>
+                                <select id="unit-selector">
+                                    <option>Modèle URGENCY</option>
+                                    <option>Modèle DIAGNOSTIC</option>
+                                    <option>Modèle SUIVI</option>
+                                    <option>Modèle PRÉVENTION</option>
+                                </select>
+                            </div>
+                            <button class="btn btn-primary" style="width:100%" onclick="showPage('home')">Soumettre ma demande</button>
+                        </form>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+    </main>
+
+    <!-- MENTIONS LÉGALES (FOOTER INTERACTIF) -->
+    <section class="legal">
+        <div class="container">
+            <div class="legal-grid">
+                <div class="legal-item" onclick="showPage('legal')">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"></path><path d="M3 7v1a3 3 0 0 0 6 0V7m0 1a3 3 0 0 0 6 0V7m0 1a3 3 0 0 0 6 0V7H3"></path><path d="M19 21V10"></path><path d="M5 21V10"></path></svg>
+                    <h4>Éditeur</h4>
+                    <p>Block Care SAS<br>55 Rue de la Verrerie, 75004 Paris<br><a href="mailto:contact@blockcare.org" style="color: inherit; text-decoration: underline !important;">contact@blockcare.org</a></p>
+                </div>
+                <div class="legal-item" onclick="showPage('legal')">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                    <h4>Hébergement</h4>
+                    <p>Protection certifiée HDS (Hébergeur de Données de Santé)<br>Serveurs localisés en France métropolitaine.</p>
+                </div>
+                <div class="legal-item" onclick="showPage('legal')">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                    <h4>Confidentialité</h4>
+                    <p>Données chiffrées de bout en bout.<br>Conformité stricte RGPD et protocoles de sécurité médicale.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer><div class="container"><p>&copy; 2024 Block Care. Innovation MedTech au service de l'humanité.</p></div></footer>
+
+    <script>
+        const apiKey = "";
+        let map;
+
+        // --- GEMINI API CORE ---
+        async function callGemini(prompt, systemInstruction = "") {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                systemInstruction: { parts: [{ text: systemInstruction }] }
+            };
+
+            for (let i = 0; i < 5; i++) {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) throw new Error('API Error');
+                    const data = await response.json();
+                    return data.candidates?.[0]?.content?.parts?.[0]?.text;
+                } catch (e) {
+                    await new Promise(r => setTimeout(r, Math.pow(2, i) * 1000));
+                }
+            }
+            throw new Error('Échec de la connexion après plusieurs tentatives.');
+        }
+
+        // ✨ Assistant de Rédaction de Mission
+        async function refineMissionRequest() {
+            const contextText = document.getElementById('mission-context').value;
+            if (!contextText || contextText.length < 10) return;
+
+            const loader = document.getElementById('ai-refine-loader');
+            const resultBox = document.getElementById('ai-refine-result');
+            const resultText = document.getElementById('ai-refine-text');
+
+            loader.style.display = 'flex';
+            resultBox.style.display = 'none';
+
+            try {
+                const prompt = `Reformule ce contexte humanitaire de manière professionnelle : "${contextText}". Suggère aussi l'unité Block Care adaptée (URGENCY, DIAGNOSTIC, SUIVI, PREVENTION). Format: [Reformulation] ... [Unité] ...`;
+                const system = "Tu es un expert en logistique humanitaire.";
+                const response = await callGemini(prompt, system);
+                
+                const parts = response.split('[Unité]');
+                const refined = parts[0].replace('[Reformulation]', '').trim();
+                const suggestedUnit = parts[1] ? parts[1].trim() : "";
+
+                resultText.innerText = refined;
+                resultBox.style.display = 'block';
+
+                const selector = document.getElementById('unit-selector');
+                if (suggestedUnit.toUpperCase().includes('URGENCY')) selector.selectedIndex = 0;
+                else if (suggestedUnit.toUpperCase().includes('DIAGNOSTIC')) selector.selectedIndex = 1;
+                else if (suggestedUnit.toUpperCase().includes('SUIVI')) selector.selectedIndex = 2;
+                else if (suggestedUnit.toUpperCase().includes('PREVENTION')) selector.selectedIndex = 3;
+            } catch (err) {
+                console.error(err);
+            } finally {
+                loader.style.display = 'none';
+            }
+        }
+
+        function applyAiRefinement() {
+            const refined = document.getElementById('ai-refine-text').innerText;
+            document.getElementById('mission-context').value = refined;
+            document.getElementById('ai-refine-result').style.display = 'none';
+        }
+
+        // ✨ Calculateur d'Impact Don
+        async function generateDonationImpact() {
+            const amount = document.getElementById('custom-amount-input').value || 30;
+            const loader = document.getElementById('ai-impact-loader');
+            const result = document.getElementById('ai-impact-result');
+
+            loader.style.display = 'flex';
+            result.innerText = "";
+
+            try {
+                const prompt = `Rédige une phrase inspirante montrant comment un don de ${amount}€ à Block Care sauve des vies grâce aux modules médicaux.`;
+                const system = "Tu es un porte-parole humanitaire.";
+                const response = await callGemini(prompt, system);
+                result.innerText = response;
+            } catch (err) {
+                result.innerText = "Chaque don permet de sauver des vies sur le terrain.";
+            } finally {
+                loader.style.display = 'none';
+            }
+        }
+
+        // --- NAVIGATION & INTERFACE ---
+        function toggleSearchBar() {
+            const bar = document.getElementById('site-search');
+            bar.classList.toggle('active');
+            if (bar.classList.contains('active')) {
+                bar.focus();
+            }
+        }
+
+        function showPage(pageId) {
+            document.querySelectorAll('.page').forEach(page => { page.classList.remove('active'); });
+            const activePage = document.getElementById('page-' + pageId);
+            if(activePage) { activePage.classList.add('active'); }
+            document.querySelectorAll('.nav-links a, .btn-donate-nav').forEach(link => { link.classList.remove('active'); });
+            const navLink = document.getElementById('nav-' + pageId);
+            if(navLink) navLink.classList.add('active');
+            window.scrollTo(0, 0);
+
+            if(pageId === 'map') {
+                setTimeout(initMap, 100);
+            }
+        }
+
+        function initMap() {
+            if (map) { map.remove(); }
+            map = L.map('map-element').setView([15, 20], 3);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; CARTO',
+                subdomains: 'abcd',
+                maxZoom: 19
+            }).addTo(map);
+
+            const locations = [
+                { name: "Soudan (El Fasher)", coords: [13.62, 25.34], details: "15 Unités URGENCY déployées" },
+                { name: "RDC (Goma)", coords: [-1.67, 29.22], details: "22 Unités URGENCY & DIAGNOSTIC" },
+                { name: "Yémen (Aden)", coords: [12.78, 45.01], details: "18 Unités SUIVI opérationnelles" },
+                { name: "Mali (Gao)", coords: [16.27, -0.04], details: "12 Unités URGENCY" },
+                { name: "Afghanistan (Herat)", coords: [34.35, 62.20], details: "20 Unités DIAGNOSTIC déployées" },
+                { name: "Indonésie (Palu)", coords: [-0.89, 119.87], details: "10 Unités PRÉVENTION" },
+                { name: "Haïti (Les Cayes)", coords: [18.19, -73.74], details: "14 Unités URGENCY opérationnelles" },
+                { name: "Éthiopie (Mekele)", coords: [13.49, 39.47], details: "13 Unités SUIVI" },
+                { name: "Unité CIOFFI", coords: [48.7893, 2.3637], details: "Déployée à l'EFREI" }
+            ];
+
+            locations.forEach(loc => {
+                L.circleMarker(loc.coords, {
+                    radius: 8, fillColor: "#006cce", color: "#fff", weight: 2, opacity: 1, fillOpacity: 0.8
+                }).addTo(map).bindPopup(`<strong>${loc.name}</strong><br>${loc.details}`);
+            });
+        }
+
+        // CARROUSELS
+        let currentUrgencySlide = 0;
+        function moveUrgencySlide(direction) {
+            const container = document.querySelector('#urgency-carousel .carousel-slides');
+            const slides = document.querySelectorAll('#urgency-carousel .carousel-slide');
+            currentUrgencySlide = (currentUrgencySlide + direction + slides.length) % slides.length;
+            container.style.transform = `translateX(-${currentUrgencySlide * 100}%)`;
+        }
+
+        let currentDiagnosticSlide = 0;
+        function moveDiagnosticSlide(direction) {
+            const container = document.querySelector('#diagnostic-carousel .carousel-slides');
+            const slides = document.querySelectorAll('#diagnostic-carousel .carousel-slide');
+            currentDiagnosticSlide = (currentDiagnosticSlide + direction + slides.length) % slides.length;
+            container.style.transform = `translateX(-${currentDiagnosticSlide * 100}%)`;
+        }
+
+        let currentSuiviSlide = 0;
+        function moveSuiviSlide(direction) {
+            const container = document.querySelector('#suivi-carousel .carousel-slides');
+            const slides = document.querySelectorAll('#suivi-carousel .carousel-slide');
+            currentSuiviSlide = (currentSuiviSlide + direction + slides.length) % slides.length;
+            container.style.transform = `translateX(-${currentSuiviSlide * 100}%)`;
+        }
+
+        let currentPreventionSlide = 0;
+        function movePreventionSlide(direction) {
+            const container = document.querySelector('#prevention-carousel .carousel-slides');
+            const slides = document.querySelectorAll('#prevention-carousel .carousel-slide');
+            currentPreventionSlide = (currentPreventionSlide + direction + slides.length) % slides.length;
+            container.style.transform = `translateX(-${currentPreventionSlide * 100}%)`;
+        }
+
+        const header = document.getElementById('main-header');
+        window.addEventListener('scroll', () => {
+            if (window.scrollY > 50) { header.classList.add('scrolled'); } 
+            else { header.classList.remove('scrolled'); }
+        });
+
+        function toggleDonation(btn) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        }
+        function selectAmount(btn, amount) {
+            document.querySelectorAll('.amount-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('custom-amount-input').value = '';
+        }
+        function clearAmountBtns() {
+            document.querySelectorAll('.amount-btn').forEach(b => b.classList.remove('active'));
+        }
+    </script>
+
+</body>
+</html>
